@@ -55,10 +55,47 @@ public class MainActivity extends AppCompatActivity {
         Rational aspectRatio = new Rational (textureView.getWidth(), textureView.getHeight());
         Size screen = new Size(textureView.getWidth(), textureView.getHeight()); //size of the screen
 
-        // Creating Config for preview use-case
-        PreviewConfig pConfig = new PreviewConfig.Builder().setTargetAspectRatio(aspectRatio).setTargetResolution(screen).build();
+        /*
+            Creating preview stream by creating Preview use case.
+
+            @doc: https://developer.android.com/reference/androidx/camera/core/Preview.html
+
+            ==========================================================================
+
+            A preview use case uses a SurfaceTexture to stream the camera input. Also provides
+            additional information for View options. The image preview is streamed to the
+            SurfaceTexture when the camera becomes active.
+
+            *note: CameraView class provides a Preview to already implement a View API
+                https://developer.android.com/reference/androidx/camera/view/CameraView
+
+            A preview config is a configuration interface class to control different aspects
+            of the use case's operations. There are specific docs for each use case for CameraX.
+            Even though CameraX auto determines resolution and aspect ratio, check the returned
+            camera image size just to make sure.
+
+            @doc: https://developer.android.com/training/camerax/configuration
+
+            ==========================================================================
+
+            @doc: https://developer.android.com/training/camerax/preview
+        */
+        // Creating Config for preview use case
+        PreviewConfig pConfig = new PreviewConfig.Builder().build();//.setTargetAspectRatio(aspectRatio).setTargetResolution(screen).build();
+
+        // Creating preview for the use-case of our camera using the previewConfig before (pConfig)
         Preview preview = new Preview(pConfig);
 
+        /*
+        Setting setOnPreviewOutputUpdateListener to the camera will signal the use case is ready
+        to receive data.
+        When the preview becomes active it will output a preview output (Preview.PreviewOutput output).
+
+        After setOnPreviewOutputUpdateListener the camera is configured. Just need to turn it
+        on and off.
+
+        @doc: https://developer.android.com/reference/androidx/camera/core/Preview.html#setOnPreviewOutputUpdateListener(androidx.camera.core.Preview.OnPreviewOutputUpdateListener)
+         */
         preview.setOnPreviewOutputUpdateListener(
                 new Preview.OnPreviewOutputUpdateListener() {
                     //to update the surface texture we  have to destroy it first then re-add it
@@ -69,13 +106,18 @@ public class MainActivity extends AppCompatActivity {
                         parent.addView(textureView, 0);
 
                         textureView.setSurfaceTexture(output.getSurfaceTexture());
-                        updateTransform();
+                        updateTransform(); //WTF does this do.
                     }
                 });
 
+        /*
+        ImageCapture use case.
 
+        @doc: https://developer.android.com/training/camerax/take-photo
+         */
         ImageCaptureConfig imageCaptureConfig = new ImageCaptureConfig.Builder().setCaptureMode(ImageCapture.CaptureMode.MIN_LATENCY)
                 .setTargetRotation(getWindowManager().getDefaultDisplay().getRotation()).build();
+
         final ImageCapture imgCap = new ImageCapture(imageCaptureConfig);
 
         findViewById(R.id.imgCapture).setOnClickListener(new View.OnClickListener() {
@@ -101,6 +143,13 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        /*
+        Turns the camera on and off by binding the preview use case to the activity Lifecycle.
+        When the activity starts, the preview is going to start, and the camera starts the stream.
+        Vice Versa.
+
+        using both use cases of preview and image capture.
+         */
         //bind to lifecycle:
         CameraX.bindToLifecycle((LifecycleOwner)this, preview, imgCap);
     }
