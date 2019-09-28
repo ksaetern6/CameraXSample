@@ -1,5 +1,6 @@
 package com.example.camerax;
 
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -14,9 +15,10 @@ import androidx.lifecycle.LifecycleOwner;
 
 
 import android.content.pm.PackageManager;
-import android.graphics.Matrix;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.MediaStore;
+import android.util.Log;
 import android.util.Rational;
 import android.util.Size;
 import android.view.Surface;
@@ -24,6 +26,7 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
+import android.graphics.Matrix;
 
 import java.io.File;
 
@@ -46,56 +49,23 @@ public class MainActivity extends AppCompatActivity {
         } else{
             ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS);
         }
+
+
     }
 
+    /*
+    @name: startCamera
+
+    @desc:
+     */
     private void startCamera() {
 
+        //unbinds all u se cases from the lifecycle and removes them from the CameraX
         CameraX.unbindAll();
 
-        Rational aspectRatio = new Rational (textureView.getWidth(), textureView.getHeight());
-        Size screen = new Size(textureView.getWidth(), textureView.getHeight()); //size of the screen
-
-        /*
-            Creating preview stream by creating Preview use case.
-
-            @doc: https://developer.android.com/reference/androidx/camera/core/Preview.html
-
-            ==========================================================================
-
-            A preview use case uses a SurfaceTexture to stream the camera input. Also provides
-            additional information for View options. The image preview is streamed to the
-            SurfaceTexture when the camera becomes active.
-
-            *note: CameraView class provides a Preview to already implement a View API
-                https://developer.android.com/reference/androidx/camera/view/CameraView
-
-            A preview config is a configuration interface class to control different aspects
-            of the use case's operations. There are specific docs for each use case for CameraX.
-            Even though CameraX auto determines resolution and aspect ratio, check the returned
-            camera image size just to make sure.
-
-            @doc: https://developer.android.com/training/camerax/configuration
-
-            ==========================================================================
-
-            @doc: https://developer.android.com/training/camerax/preview
-        */
-        // Creating Config for preview use case
-        PreviewConfig pConfig = new PreviewConfig.Builder().build();//.setTargetAspectRatio(aspectRatio).setTargetResolution(screen).build();
-
-        // Creating preview for the use-case of our camera using the previewConfig before (pConfig)
+        PreviewConfig pConfig = new PreviewConfig.Builder().build();
         Preview preview = new Preview(pConfig);
 
-        /*
-        Setting setOnPreviewOutputUpdateListener to the camera will signal the use case is ready
-        to receive data.
-        When the preview becomes active it will output a preview output (Preview.PreviewOutput output).
-
-        After setOnPreviewOutputUpdateListener the camera is configured. Just need to turn it
-        on and off.
-
-        @doc: https://developer.android.com/reference/androidx/camera/core/Preview.html#setOnPreviewOutputUpdateListener(androidx.camera.core.Preview.OnPreviewOutputUpdateListener)
-         */
         preview.setOnPreviewOutputUpdateListener(
                 new Preview.OnPreviewOutputUpdateListener() {
                     //to update the surface texture we  have to destroy it first then re-add it
@@ -106,33 +76,59 @@ public class MainActivity extends AppCompatActivity {
                         parent.addView(textureView, 0);
 
                         textureView.setSurfaceTexture(output.getSurfaceTexture());
-                        updateTransform(); //WTF does this do.
                     }
                 });
-
         /*
         ImageCapture use case.
 
         @doc: https://developer.android.com/training/camerax/take-photo
          */
-        ImageCaptureConfig imageCaptureConfig = new ImageCaptureConfig.Builder().setCaptureMode(ImageCapture.CaptureMode.MIN_LATENCY)
-                .setTargetRotation(getWindowManager().getDefaultDisplay().getRotation()).build();
+
+        //Getting default rotation from the device.
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+
+        ImageCaptureConfig imageCaptureConfig = new ImageCaptureConfig.Builder()
+                .setCaptureMode(ImageCapture.CaptureMode.MIN_LATENCY)
+                .setTargetRotation(rotation).build();
 
         final ImageCapture imgCap = new ImageCapture(imageCaptureConfig);
+
+//        findViewById(R.id.imgCapture).setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View view) {
+//                /*
+//                READ from external storage
+//                WRITE to external storage
+//                 */
+//                File file = new File(MediaStore.Images.Media.EXTERNAL_CONTENT_URI + "/" + System.currentTimeMillis() + ".jpeg");
+//                Log.i("MainActivity",file.getAbsolutePath());
+//
+//            }
+//        });
 
         findViewById(R.id.imgCapture).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                File file = new File(Environment.getExternalStorageDirectory() + "/" + System.currentTimeMillis() + ".png");
+                ///storage/emulated/0/1569710188867.png
+                //content://media/external/images/media/1569710240495.jpeg
+
+                String filePath = Environment.getExternalStorageDirectory()
+                        + "/"
+                        + System.currentTimeMillis()
+                        + ".jpeg";
+
+                File file = new File(filePath);
+                Log.i("MainActivity", file.getAbsolutePath());
+
                 imgCap.takePicture(file, new ImageCapture.OnImageSavedListener() {
                     @Override
-                    public void onImageSaved(@NonNull File file) {
+                    public void onImageSaved(File file) {
                         String msg = "Pic captured at " + file.getAbsolutePath();
                         Toast.makeText(getBaseContext(), msg,Toast.LENGTH_LONG).show();
                     }
 
                     @Override
-                    public void onError(@NonNull ImageCapture.UseCaseError useCaseError, @NonNull String message, @Nullable Throwable cause) {
+                    public void onError(ImageCapture.UseCaseError useCaseError,String message, Throwable cause) {
                         String msg = "Pic capture failed : " + message;
                         Toast.makeText(getBaseContext(), msg,Toast.LENGTH_LONG).show();
                         if(cause != null){
@@ -151,65 +147,73 @@ public class MainActivity extends AppCompatActivity {
         using both use cases of preview and image capture.
          */
         //bind to lifecycle:
-        CameraX.bindToLifecycle((LifecycleOwner)this, preview, imgCap);
+        CameraX.bindToLifecycle(this, preview, imgCap);
     }
-
-    private void updateTransform(){
-        Matrix mx = new Matrix();
-        float w = textureView.getMeasuredWidth();
-        float h = textureView.getMeasuredHeight();
-
-        float cX = w / 2f;
-        float cY = h / 2f;
-
-        int rotationDgr;
-        int rotation = (int)textureView.getRotation();
-
-        switch(rotation){
-            case Surface.ROTATION_0:
-                rotationDgr = 0;
-                break;
-            case Surface.ROTATION_90:
-                rotationDgr = 90;
-                break;
-            case Surface.ROTATION_180:
-                rotationDgr = 180;
-                break;
-            case Surface.ROTATION_270:
-                rotationDgr = 270;
-                break;
-            default:
-                return;
-        }
-
-        mx.postRotate((float)rotationDgr, cX, cY);
-        textureView.setTransform(mx);
-    }
-
-//    @Override
-//    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-//
-//        if(requestCode == REQUEST_CODE_PERMISSIONS){
-//            if(allPermissionsGranted()){
-//                startCamera();
-//            } else{
-//                Toast.makeText(this, "Permissions not granted by the user.", Toast.LENGTH_SHORT).show();
-//                finish();
-//            }
-//        }
-//    }
 
     /*
+    FLASH CODE
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fab_flash"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:fabSize="normal"
+            android:src="@drawable/ic_flash"
+            android:layout_alignParentBottom="true"
+            android:layout_margin="32dp"
+            app:backgroundTint="@android:color/white"/>
+
+    fab_flash.setOnClickListener {
+            val flashMode = imageCapture?.flashMode
+            if(flashMode == FlashMode.ON) imageCapture?.flashMode = FlashMode.OFF
+            else imageCapture?.flashMode = FlashMode.ON
+        }
+     */
+
+    /*
+    @name: allPermissionsGranted()
+    @desc: true or false to check if AndroidManifest gave camera permission.
 
     @doc: https://developer.android.com/training/permissions/requesting
      */
     private boolean allPermissionsGranted(){
 
-        for(String permission : REQUIRED_PERMISSIONS){
+        for(String permission : REQUIRED_PERMISSIONS) {
             if(ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED){
                 return false;
             }
         }
         return true;
     }
+    /*
+    @name: isExternalStorageWritable
+    @desc: Checks if external storage is available to read and write.
+     */
+    private boolean isExternalStorageWritable() {
+        String state = Environment.getExternalStorageState();
+        if (Environment.MEDIA_MOUNTED.equals(state)){
+            return true;
+        }
+        return false;
+    }
+
+    /*
+    @name: isExternalStorageReadable
+    @desc: Checks if external storage is available to read.
+     */
+    private boolean isExternalStorageReadable() {
+        String state = Environment.getExternalStorageState();
+        if (Environment.MEDIA_MOUNTED.equals(state) ||
+            Environment.MEDIA_MOUNTED_READ_ONLY.equals(state)) {
+            return true;
+        }
+        return false;
+    }
+    /*
+    @name: isExternalStorageWritable
+    @desc: Checks if external storage is available to read and write.
+     */
+//    private File createImageFile() {
+//
+//    }
+
 }
